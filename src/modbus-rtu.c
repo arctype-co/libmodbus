@@ -276,7 +276,7 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 #else
 #if HAVE_DECL_TIOCM_RTS
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
-    if (ctx_rtu->rts != MODBUS_RTU_RTS_NONE) {
+    if (ctx_rtu->rts == MODBUS_RTU_RTS_UP || ctx_rtu->rts == MODBUS_RTU_RTS_DOWN) {
         ssize_t size;
 
         if (ctx->debug) {
@@ -727,6 +727,11 @@ static int _modbus_rtu_connect(modbus_t *ctx)
     tios.c_cflag |= (CREAD | CLOCAL);
     /* CSIZE, HUPCL, CRTSCTS (hardware flow control) */
 
+    /* Set hardware flow control */
+    if(ctx_rtu->rts == MODBUS_RTU_RTS_KERNEL) {
+        tios.c_cflag |= CRTSCTS;
+    }
+
     /* Set data bits (5, 6, 7, 8 bits)
        CSIZE        Bit mask for data bits
     */
@@ -1004,7 +1009,7 @@ int modbus_rtu_set_rts(modbus_t *ctx, int mode)
         modbus_rtu_t *ctx_rtu = ctx->backend_data;
 
         if (mode == MODBUS_RTU_RTS_NONE || mode == MODBUS_RTU_RTS_UP ||
-            mode == MODBUS_RTU_RTS_DOWN) {
+            mode == MODBUS_RTU_RTS_DOWN || mode == MODBUS_RTU_RTS_KERNEL) {
             ctx_rtu->rts = mode;
 
             /* Set the RTS bit in order to not reserve the RS485 bus */
