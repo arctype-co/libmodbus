@@ -576,6 +576,7 @@ static int _modbus_rtu_connect(modbus_t *ctx)
         return -1;
     }
 #else
+    
     /* The O_NOCTTY flag tells UNIX that this program doesn't want
        to be the "controlling terminal" for that port. If you
        don't specify this then any input (such as keyboard abort
@@ -728,7 +729,8 @@ static int _modbus_rtu_connect(modbus_t *ctx)
     /* CSIZE, HUPCL, CRTSCTS (hardware flow control) */
 
     /* Set hardware flow control */
-    if(ctx_rtu->rts == MODBUS_RTU_RTS_KERNEL) {
+    if((ctx_rtu->rts == MODBUS_RTU_RTS_KERNEL) &&
+       (ctx_rtu->serial_mode == MODBUS_RTU_RS232)) {
         tios.c_cflag |= CRTSCTS;
     }
 
@@ -898,6 +900,21 @@ static int _modbus_rtu_connect(modbus_t *ctx)
         ctx->s = -1;
         return -1;
     }
+
+#if HAVE_DECL_TIOCM_RTS
+    if (ctx_rtu->serial_mode == MODBUS_RTU_RS485) {
+        struct serial_rs485 rs485conf;
+        memset(&rs485conf, 0x0, sizeof(struct serial_rs485));
+        rs485conf.flags = SER_RS485_ENABLED;
+        if (ctx_rtu->rts == MODBUS_RTU_RTS_KERNEL) {
+            rs485conf.flags |= SER_RS485_RTS_ON_SEND;
+        }
+        if (ioctl(ctx->s, TIOCSRS485, &rs485conf) < 0) {
+            fprintf(stderr, "Failed to set RS485 flags\n");
+            return -1;
+        }
+    } 
+#endif
 #endif
 
     return 0;
@@ -913,28 +930,7 @@ int modbus_rtu_set_serial_mode(modbus_t *ctx, int mode)
     if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
 #if HAVE_DECL_TIOCSRS485
         modbus_rtu_t *ctx_rtu = ctx->backend_data;
-        struct serial_rs485 rs485conf;
-        memset(&rs485conf, 0x0, sizeof(struct serial_rs485));
-
-        if (mode == MODBUS_RTU_RS485) {
-            rs485conf.flags = SER_RS485_ENABLED;
-            if (ioctl(ctx->s, TIOCSRS485, &rs485conf) < 0) {
-                return -1;
-            }
-
-            ctx_rtu->serial_mode = MODBUS_RTU_RS485;
-            return 0;
-        } else if (mode == MODBUS_RTU_RS232) {
-            /* Turn off RS485 mode only if required */
-            if (ctx_rtu->serial_mode == MODBUS_RTU_RS485) {
-                /* The ioctl call is avoided because it can fail on some RS232 ports */
-                if (ioctl(ctx->s, TIOCSRS485, &rs485conf) < 0) {
-                    return -1;
-                }
-            }
-            ctx_rtu->serial_mode = MODBUS_RTU_RS232;
-            return 0;
-        }
+        ctx_rtu->serial_mode = mode;
 #else
         if (ctx->debug) {
             fprintf(stderr, "This function isn't supported on your platform\n");
