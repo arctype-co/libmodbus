@@ -907,7 +907,9 @@ static int _modbus_rtu_connect(modbus_t *ctx)
         memset(&rs485conf, 0x0, sizeof(struct serial_rs485));
         rs485conf.flags = SER_RS485_ENABLED;
         if (ctx_rtu->rts == MODBUS_RTU_RTS_KERNEL) {
-            rs485conf.flags |= SER_RS485_RTS_ON_SEND;
+            rs485conf.delay_rts_after_send = 1;
+            rs485conf.flags &= ~SER_RS485_RTS_ON_SEND;
+            rs485conf.flags |= SER_RS485_RTS_AFTER_SEND;
         }
         if (ioctl(ctx->s, TIOCSRS485, &rs485conf) < 0) {
             fprintf(stderr, "Failed to set RS485 flags\n");
